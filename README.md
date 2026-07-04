@@ -64,7 +64,7 @@ npm install
 
 ```bash
 cd server
-npm start
+npm run dev
 ```
 
 ### Start Frontend
