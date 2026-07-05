@@ -26,14 +26,21 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+
+        {/* 👇 default route goes to login */}
+        <Route path="/" element={<Navigate to="/login" />} />
+
         <Route path="/login"    element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/"         element={<PrivateLayout><Dashboard /></PrivateLayout>} />
+
+        {/* protected routes */}
+        <Route path="/dashboard" element={<PrivateLayout><Dashboard /></PrivateLayout>} />
         <Route path="/groups"   element={<PrivateLayout><Groups /></PrivateLayout>} />
         <Route path="/expenses" element={<PrivateLayout><Expenses /></PrivateLayout>} />
         <Route path="/settle"   element={<PrivateLayout><SettleUp /></PrivateLayout>} />
         <Route path="/profile"  element={<PrivateLayout><Profile /></PrivateLayout>} />
-        <Route path="*"         element={<Navigate to="/" />} />
+
+        <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>
   );
