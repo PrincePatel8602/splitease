@@ -40,37 +40,48 @@ export default function SettleUp() {
   };
 
   // ── Submit receipt ────────────────────────────────────────────────────────
-  const handleSubmitReceipt = async () => {
-    if (!receiptFile) return showToast("Please select a receipt image", "error");
-    setSubmitting(true);
-    try {
-      let paymentId = receiptModal._id;
+ const handleSubmitReceipt = async () => {
+  if (!receiptFile) return showToast("Please select a receipt image", "error");
+  setSubmitting(true);
+  
+  // Save toName before clearing modal
+  const toName = receiptModal.toName || receiptModal.to?.name || "";
+  
+  try {
+    let paymentId = receiptModal._id;
 
-      // If manual settle from balance card — create payment first
-      if (receiptModal.isManualSettle) {
-        const { data } = await axios.post("/api/payments", {
-          fromUserId:  user._id,
-          toUserId:    receiptModal.toUserId,
-          amount:      receiptModal.amount,
-          paymentMode: manualMode,
-          expenseIds:  [],
-        });
-        paymentId = data.payment._id;
-      }
-
-      const fd = new FormData();
-      fd.append("receipt", receiptFile);
-      fd.append("note", receiptNote);
-      await axios.post(`/api/payments/${paymentId}/receipt`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
+    if (receiptModal.isManualSettle) {
+      const { data } = await axios.post("/api/payments", {
+        fromUserId:  user._id,
+        toUserId:    receiptModal.toUserId,
+        amount:      receiptModal.amount,
+        paymentMode: manualMode,
+        expenseIds:  [],
       });
-      setReceiptModal(null); setReceiptFile(null); setReceiptNote(""); setManualMode("Cash");
-      showToast("✅ Receipt submitted! Waiting for " + receiptModal.toName + " to approve.");
-      fetchData();
-    } catch (e) { showToast(e.response?.data?.error || "Upload failed", "error"); }
-    finally { setSubmitting(false); }
-  };
+      paymentId = data.payment._id;
+      await new Promise(r => setTimeout(r, 500));
+    }
 
+    const formData = new FormData();
+    formData.append("receipt", receiptFile);
+    formData.append("note", receiptNote);
+    
+    await axios.post(`/api/payments/${paymentId}/receipt`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    
+    setReceiptModal(null);
+    setReceiptFile(null);
+    setReceiptNote("");
+    setManualMode("Cash");
+    showToast("✅ Receipt submitted! Waiting for " + toName + " to approve.");
+    fetchData();
+  } catch (err) {
+    showToast(err.response?.data?.error || "Upload failed", "error");
+  } finally {
+    setSubmitting(false);
+  }
+};
   // ── Approve ───────────────────────────────────────────────────────────────
   const handleApprove = async () => {
     setSubmitting(true);
@@ -95,7 +106,19 @@ export default function SettleUp() {
     finally { setSubmitting(false); }
   };
 
-  const downloadReceipt = (id) => window.open(`/api/payments/${id}/receipt`, "_blank");
+ const downloadReceipt = async (id) => {
+  try {
+    const res = await axios.get(`/api/payments/${id}/receipt`, { responseType: "blob" });
+    const url = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+    const a   = document.createElement("a");
+    a.href    = url;
+    a.download = `receipt-${id}.pdf`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    showToast("Could not download receipt", "error");
+  }
+};
 
   // ── Compute what's pending ────────────────────────────────────────────────
   // Payments I need to act on
@@ -257,7 +280,7 @@ export default function SettleUp() {
                     <div style={{ marginTop:8, padding:"6px 10px", background:"#f8f7f4", borderRadius:7, display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ fontSize:11, color:"#52514e" }}>📎 Receipt submitted</span>
                       {p.receiptNote && <span style={{ fontSize:11, color:"#898781" }}>· {p.receiptNote}</span>}
-                      <a href={p.receiptUrl} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#2a78d6", marginLeft:"auto" }}>View →</a>
+                      <a href={`http://localhost:5000${p.receiptUrl}`} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#2a78d6", marginLeft:"auto" }}>View →</a>
                     </div>
                   )}
 
@@ -358,7 +381,7 @@ export default function SettleUp() {
             {approveModal.receiptUrl ? (
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontSize:12, fontWeight:500, color:"#52514e", marginBottom:6 }}>Receipt submitted:</div>
-                <a href={approveModal.receiptUrl} target="_blank" rel="noreferrer"
+                <a href={`http://localhost:5000${approveModal.receiptUrl}`} target="_blank" rel="noreferrer"
                   style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"8px 14px", background:"#e6f1fb", color:"#185fa5", borderRadius:8, fontSize:12, textDecoration:"none", fontWeight:500 }}>
                   📎 Open receipt →
                 </a>
