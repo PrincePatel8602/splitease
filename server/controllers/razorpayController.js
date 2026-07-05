@@ -51,8 +51,8 @@ exports.verifyPayment = async (req, res) => {
       return res.status(400).json({ error: "Payment verification failed — invalid signature" });
     }
 
-    // ✅ Payment is genuine — save to DB
-    const payment = await Payment.create({
+ // ✅ Payment is genuine — save to DB
+const payment = await Payment.create({
   from:            req.user._id,
   to:              toUserId,
   amount,
@@ -61,13 +61,20 @@ exports.verifyPayment = async (req, res) => {
   expenses:        expenseIds || [],
   razorpayOrderId:   razorpay_order_id,
   razorpayPaymentId: razorpay_payment_id,
-  status:      "approved",     /* AUTO-SETTLE — Razorpay verified, no receipt needed */
-  approvedAt:  new Date(),     /* MARK APPROVED IMMEDIATELY */
+  status:      "approved",
+  approvedAt:  new Date(),
 });
 
-    if (expenseIds?.length) {
-      await Expense.updateMany({ _id: { $in: expenseIds } }, { locked: true, settled: true });
-    }
+// Lock ALL expenses between these two users (not just expenseIds)
+const fromId = req.user._id.toString();
+await Expense.updateMany(
+  { settled: false, paidBy: toUserId, splitBetween: fromId },
+  { $set: { settled: true, locked: true } }
+);
+await Expense.updateMany(
+  { settled: false, paidBy: fromId, splitBetween: toUserId },
+  { $set: { settled: true, locked: true } }
+);
 
     // Send email receipts
     const [fromUser, toUser] = await Promise.all([

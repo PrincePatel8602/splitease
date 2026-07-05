@@ -66,6 +66,7 @@ exports.getMyBalances = async (req, res) => {
     const myId = req.user._id.toString();
     const expenses = await Expense.find({
       settled: false,
+      locked:  false,
       $or: [{ paidBy: req.user._id }, { splitBetween: req.user._id }],
     }).populate("paidBy splitBetween", "name email");
 
