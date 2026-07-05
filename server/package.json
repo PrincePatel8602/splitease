@@ -18,7 +18,8 @@
     "nodemailer": "^6.9.7",
     "pdfkit": "^0.14.0",
     "qrcode": "^1.5.4",
-    "razorpay": "^2.9.6"
+    "razorpay": "^2.9.6",
+    "serve-static": "^2.2.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

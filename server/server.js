@@ -34,12 +34,21 @@ app.get("/health", (req, res) => {
 });
 
 // API Routes
+// API Routes
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/expenses", require("./routes/expenseRoutes"));
 app.use("/api/groups", require("./routes/groupRoutes"));
 app.use("/api/payments", require("./routes/paymentRoutes"));
 app.use("/api/razorpay", require("./routes/razorpayRoutes"));
 app.use("/verify", require("./routes/verifyRoutes"));
+
+// Serve React build
+app.use(express.static(path.join(__dirname, "../client/dist")));
+
+// React Router fallback
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+});
 
 // Daily reminders at 9 AM
 cron.schedule("0 9 * * *", async () => {
