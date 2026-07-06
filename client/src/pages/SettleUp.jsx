@@ -126,13 +126,14 @@ export default function SettleUp() {
   const pendingApproval = payments.filter(p => p.status === "receipt_submitted" && p.to?._id === user._id);
 
   // Balances where I owe someone and no pending payment exists
-  const settledUserIds = new Set(
-    payments
-      .filter(p => ["pending_receipt","receipt_submitted","approved"].includes(p.status))
-      .map(p => p.from?._id === user._id ? p.to?._id : p.from?._id)
-  );
+ // Only hide "You owe" if there's a PENDING (not approved) payment for that user
+const pendingSettleUserIds = new Set(
+  payments
+    .filter(p => ["pending_receipt", "receipt_submitted"].includes(p.status))
+    .map(p => p.from?._id === user._id ? p.to?._id : p.from?._id)
+);
 
-  const iOweList  = balances.filter(b => b.amount < 0 && !settledUserIds.has(b.userId));
+const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(b.userId));
   const owedToMe  = balances.filter(b => b.amount > 0);
 
   const STATUS = {
@@ -230,11 +231,12 @@ export default function SettleUp() {
                 <div style={{ fontSize:16, fontWeight:600, color:"#3B6D11" }}>
                   ₹{b.amount.toLocaleString()}
                 </div>
-                {settledUserIds.has(b.userId) && (
-                  <span style={{ fontSize:11, background:"#e6f1fb", color:"#185fa5", padding:"3px 10px", borderRadius:20 }}>
-                    📋 Payment pending
-                  </span>
-                )}
+                {pendingSettleUserIds.has(b.userId) && (
+  <span style={{ fontSize:11, background:"#e6f1fb", color:"#185fa5", padding:"3px 10px", borderRadius:20 }}>
+    📋 Payment pending
+  </span>
+)}
+
               </div>
             ))}
           </div>
