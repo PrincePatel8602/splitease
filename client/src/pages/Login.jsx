@@ -11,11 +11,24 @@ export default function Login() {
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setError(""); setLoading(true);
-    try { await login(email, password); navigate("/dashboard"); }
-    catch (err) { setError(err.response?.data?.error || "Login failed"); }
-    finally { setLoading(false); }
-  };
+  e.preventDefault();
+  setError("");
+  setLoading(true);
+
+  try {
+    await login(email, password);
+
+    // wait a tick so React updates context
+    setTimeout(() => {
+      navigate("/dashboard", { replace: true });
+    }, 50);
+
+  } catch (err) {
+    setError(err.response?.data?.error || "Login failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#f8f7f4" }}>
