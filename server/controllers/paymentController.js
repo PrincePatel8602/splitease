@@ -196,10 +196,20 @@ exports.downloadReceipt = async (req, res) => {
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 async function lockExpensesBetweenUsers(fromUserId, toUserId, expenseIds = []) {
+  const now = new Date();
   if (expenseIds.length > 0) {
-    await Expense.updateMany({ _id: { $in: expenseIds } }, { $set: { settled: true, locked: true } });
+    await Expense.updateMany(
+      { _id: { $in: expenseIds } },
+      { $set: { settled: true, locked: true } }
+    );
   } else {
-    await Expense.updateMany({ settled: false, paidBy: toUserId,   splitBetween: fromUserId }, { $set: { settled: true, locked: true } });
-    await Expense.updateMany({ settled: false, paidBy: fromUserId, splitBetween: toUserId   }, { $set: { settled: true, locked: true } });
+    await Expense.updateMany(
+      { settled: false, paidBy: toUserId, splitBetween: fromUserId, createdAt: { $lte: now } },
+      { $set: { settled: true, locked: true } }
+    );
+    await Expense.updateMany(
+      { settled: false, paidBy: fromUserId, splitBetween: toUserId, createdAt: { $lte: now } },
+      { $set: { settled: true, locked: true } }
+    );
   }
 }

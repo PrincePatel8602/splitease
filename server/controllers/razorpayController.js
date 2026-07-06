@@ -66,13 +66,26 @@ const payment = await Payment.create({
 });
 
 // Lock ALL expenses between these two users (not just expenseIds)
+// Only lock expenses created BEFORE this payment
 const fromId = req.user._id.toString();
+const paymentTime = new Date();
+
 await Expense.updateMany(
-  { settled: false, paidBy: toUserId, splitBetween: fromId },
+  { 
+    settled: false, 
+    paidBy: toUserId, 
+    splitBetween: fromId,
+    createdAt: { $lte: paymentTime }  // ← only old expenses
+  },
   { $set: { settled: true, locked: true } }
 );
 await Expense.updateMany(
-  { settled: false, paidBy: fromId, splitBetween: toUserId },
+  { 
+    settled: false, 
+    paidBy: fromId, 
+    splitBetween: toUserId,
+    createdAt: { $lte: paymentTime }  // ← only old expenses
+  },
   { $set: { settled: true, locked: true } }
 );
 
