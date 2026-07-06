@@ -282,7 +282,7 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
                     <div style={{ marginTop:8, padding:"6px 10px", background:"#f8f7f4", borderRadius:7, display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ fontSize:11, color:"#52514e" }}>📎 Receipt submitted</span>
                       {p.receiptNote && <span style={{ fontSize:11, color:"#898781" }}>· {p.receiptNote}</span>}
-                      <a href={`http://localhost:5000${p.receiptUrl}`} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#2a78d6", marginLeft:"auto" }}>View →</a>
+                      <a href={`https://splitease-6.onrender.com${p.receiptUrl}`} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#2a78d6", marginLeft:"auto" }}>View →</a>
                     </div>
                   )}
 
