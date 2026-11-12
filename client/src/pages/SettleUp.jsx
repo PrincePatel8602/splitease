@@ -3,12 +3,18 @@ import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import RazorpayButton from "../components/RazorpayButton";
+import { getCache, setCache } from "../utils/cache";
+
+const API = import.meta.env.VITE_API_URL || "";
 
 export default function SettleUp() {
   const { user } = useAuth();
-  const [balances,     setBalances]     = useState([]); // who owes who
-  const [payments,     setPayments]     = useState([]);
-  const [loading,      setLoading]      = useState(true);
+  const cacheKey = `settle:${user._id}`;
+  const cached   = getCache(cacheKey);
+
+  const [balances,     setBalances]     = useState(cached?.balances || []);
+  const [payments,     setPayments]     = useState(cached?.payments || []);
+  const [loading,      setLoading]      = useState(!cached);   // show "Loading" only on very first visit
   const [toast,        setToast]        = useState("");
   const [receiptModal, setReceiptModal] = useState(null);
   const [approveModal, setApproveModal] = useState(null);
@@ -16,13 +22,14 @@ export default function SettleUp() {
   const [receiptNote,  setReceiptNote]  = useState("");
   const [manualMode,   setManualMode]   = useState("Cash");
   const [rejectReason, setRejectReason] = useState("");
-  const [submitting,   setSubmitting]   = useState(false);
+  // ONE state that says WHICH action is running: "receipt" | "approve" | "reject" | null
+  const [busy,         setBusy]         = useState(null);
   const fileRef = useRef();
 
   useEffect(() => { fetchData(); }, []);
 
+  // Silent refresh: never blanks the page
   const fetchData = async () => {
-    setLoading(true);
     try {
       const [bRes, pRes] = await Promise.all([
         axios.get("/api/expenses/balances"),
@@ -30,6 +37,7 @@ export default function SettleUp() {
       ]);
       setBalances(bRes.data);
       setPayments(pRes.data);
+      setCache(cacheKey, { balances: bRes.data, payments: pRes.data });
     } catch {}
     finally { setLoading(false); }
   };
@@ -40,85 +48,85 @@ export default function SettleUp() {
   };
 
   // ── Submit receipt ────────────────────────────────────────────────────────
- const handleSubmitReceipt = async () => {
-  if (!receiptFile) return showToast("Please select a receipt image", "error");
-  setSubmitting(true);
-  
-  // Save toName before clearing modal
-  const toName = receiptModal.toName || receiptModal.to?.name || "";
-  
-  try {
-    let paymentId = receiptModal._id;
+  const handleSubmitReceipt = async () => {
+    if (!receiptFile) return showToast("Please select a receipt image", "error");
+    setBusy("receipt");
 
-    if (receiptModal.isManualSettle) {
-      const { data } = await axios.post("/api/payments", {
-        fromUserId:  user._id,
-        toUserId:    receiptModal.toUserId,
-        amount:      receiptModal.amount,
-        paymentMode: manualMode,
-        expenseIds:  [],
-      });
-      paymentId = data.payment._id;
-      await new Promise(r => setTimeout(r, 500));
-    }
+    const toName = receiptModal.toName || receiptModal.to?.name || "";
 
-    const formData = new FormData();
-    formData.append("receipt", receiptFile);
-    formData.append("note", receiptNote);
-    
-    await axios.post(`/api/payments/${paymentId}/receipt`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-    
-    setReceiptModal(null);
-    setReceiptFile(null);
-    setReceiptNote("");
-    setManualMode("Cash");
-    showToast("✅ Receipt submitted! Waiting for " + toName + " to approve.");
-    fetchData();
-  } catch (err) {
-    showToast(err.response?.data?.error || "Upload failed", "error");
-  } finally {
-    setSubmitting(false);
-  }
-};
-  // ── Approve ───────────────────────────────────────────────────────────────
-  const handleApprove = async () => {
-    setSubmitting(true);
     try {
-      await axios.post(`/api/payments/${approveModal._id}/approve`);
+      let paymentId = receiptModal._id;
+
+      if (receiptModal.isManualSettle) {
+        const { data } = await axios.post("/api/payments", {
+          toUserId:    receiptModal.toUserId,
+          amount:      receiptModal.amount,
+          paymentMode: manualMode,
+          expenseIds:  [],
+        });
+        paymentId = data.payment._id;
+      }
+
+      const formData = new FormData();
+      formData.append("receipt", receiptFile);
+      formData.append("note", receiptNote);
+
+      await axios.post(`/api/payments/${paymentId}/receipt`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      setReceiptModal(null);
+      setReceiptFile(null);
+      setReceiptNote("");
+      setManualMode("Cash");
+      showToast("✅ Receipt submitted! Waiting for " + toName + " to approve.");
+      fetchData();
+    } catch (err) {
+      showToast(err.response?.data?.error || "Upload failed", "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // ── Approve (status changes ONLY after the server says OK) ────────────────
+  const handleApprove = async () => {
+    setBusy("approve");
+    try {
+      const { data } = await axios.post(`/api/payments/${approveModal._id}/approve`);
+      setPayments(list => list.map(p => p._id === data.payment._id ? data.payment : p));
       setApproveModal(null);
       showToast("✅ Approved! Expenses locked 🔒 and receipts emailed.");
       fetchData();
     } catch (e) { showToast(e.response?.data?.error || "Error", "error"); }
-    finally { setSubmitting(false); }
+    finally { setBusy(null); }
   };
 
   // ── Reject ────────────────────────────────────────────────────────────────
   const handleReject = async () => {
-    setSubmitting(true);
+    setBusy("reject");
     try {
       await axios.post(`/api/payments/${approveModal._id}/reject`, { reason: rejectReason });
+      setPayments(list => list.map(p => p._id === approveModal._id ? { ...p, status: "pending_receipt", receiptUrl: "", receiptNote: "" } : p));
       setApproveModal(null); setRejectReason("");
       showToast("Receipt rejected. Payer has been notified.");
       fetchData();
     } catch (e) { showToast(e.response?.data?.error || "Error", "error"); }
-    finally { setSubmitting(false); }
+    finally { setBusy(null); }
   };
 
- const downloadReceipt = async (id) => {
-  try {
-    const res = await axios.get(`/api/payments/${id}/receipt`, { responseType: "blob" });
-    const url = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
-    const a   = document.createElement("a");
-    a.href    = url;
-    a.download = `receipt-${id}.pdf`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  } catch (err) {
-    showToast("Could not download receipt", "error");
-  }
-};
+  const downloadReceipt = async (id) => {
+    try {
+      const res = await axios.get(`/api/payments/${id}/receipt`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const a   = document.createElement("a");
+      a.href    = url;
+      a.download = `receipt-${id}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      showToast("Could not download receipt", "error");
+    }
+  };
 
   // ── Compute what's pending ────────────────────────────────────────────────
   // Payments I need to act on
@@ -138,7 +146,7 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
 
   const STATUS = {
     pending_receipt:   { label:"⏳ Receipt pending", color:"#854f0b", bg:"#faeeda" },
-    receipt_submitted: { label:"📋 Awaiting approval", color:"#185fa5", bg:"#e6f1fb" },
+    receipt_submitted: { label:"📋 Awaiting approval", color:"#3a20b8", bg:"#ebe7fd" },
     approved:          { label:"✅ Approved",           color:"#3B6D11", bg:"#eaf3de" },
     rejected:          { label:"❌ Rejected",           color:"#a32d2d", bg:"#fcebeb" },
   };
@@ -172,7 +180,7 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
                   <strong>{p.from?.name}</strong> paid you <strong>₹{p.amount?.toLocaleString()}</strong> — review and approve
                 </div>
                 <button onClick={()=>setApproveModal(p)}
-                  style={{ padding:"6px 14px", background:"#2a78d6", color:"#fff", border:"none", borderRadius:7, fontSize:12, fontWeight:500, cursor:"pointer", marginLeft:12, whiteSpace:"nowrap" }}>
+                  style={{ padding:"6px 14px", background:"#4f2fe0", color:"#fff", border:"none", borderRadius:7, fontSize:12, fontWeight:500, cursor:"pointer", marginLeft:12, whiteSpace:"nowrap" }}>
                   👀 Review & approve
                 </button>
               </div>
@@ -182,7 +190,7 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
 
         {/* ── You Owe ── */}
         {iOweList.length > 0 && (
-          <div style={{ background:"#fff", border:"0.5px solid rgba(0,0,0,0.1)", borderRadius:10, padding:16, marginBottom:16 }}>
+          <div className="card">
             <div style={{ fontSize:13, fontWeight:600, color:"#a32d2d", marginBottom:12 }}>💸 You owe</div>
             {iOweList.map(b => (
               <div key={b.userId} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:"0.5px solid #f1f0ec" }}>
@@ -217,7 +225,7 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
 
         {/* ── Owed to you ── */}
         {owedToMe.length > 0 && (
-          <div style={{ background:"#fff", border:"0.5px solid rgba(0,0,0,0.1)", borderRadius:10, padding:16, marginBottom:16 }}>
+          <div className="card">
             <div style={{ fontSize:13, fontWeight:600, color:"#3B6D11", marginBottom:12 }}>💰 Owed to you</div>
             {owedToMe.map(b => (
               <div key={b.userId} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:"0.5px solid #f1f0ec" }}>
@@ -232,7 +240,7 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
                   ₹{b.amount.toLocaleString()}
                 </div>
                 {pendingSettleUserIds.has(b.userId) && (
-  <span style={{ fontSize:11, background:"#e6f1fb", color:"#185fa5", padding:"3px 10px", borderRadius:20 }}>
+  <span style={{ fontSize:11, background:"#ebe7fd", color:"#3a20b8", padding:"3px 10px", borderRadius:20 }}>
     📋 Payment pending
   </span>
 )}
@@ -259,9 +267,9 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
             </div>
             {payments.map(p => {
               const isFrom = p.from?._id === user._id;
-              const s = STATUS[p.status] || STATUS.approved;
+              const s = STATUS[p.status] || STATUS.pending_receipt;
               return (
-                <div key={p._id} style={{ padding:14, background:"#fff", border:"0.5px solid rgba(0,0,0,0.1)", borderRadius:10, marginBottom:8 }}>
+                <div key={p._id} className="card" style={{ padding:14, marginBottom:10, borderRadius:18 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:13, fontWeight:500 }}>
@@ -282,7 +290,7 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
                     <div style={{ marginTop:8, padding:"6px 10px", background:"#f8f7f4", borderRadius:7, display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ fontSize:11, color:"#52514e" }}>📎 Receipt submitted</span>
                       {p.receiptNote && <span style={{ fontSize:11, color:"#898781" }}>· {p.receiptNote}</span>}
-                      <a href={`https://splitease-6.onrender.com${p.receiptUrl}`} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#2a78d6", marginLeft:"auto" }}>View →</a>
+                      <a href={`${API}${p.receiptUrl}`} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#4f2fe0", marginLeft:"auto" }}>View →</a>
                     </div>
                   )}
 
@@ -295,7 +303,7 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
                     )}
                     {p.status === "receipt_submitted" && !isFrom && (
                       <button onClick={()=>setApproveModal(p)}
-                        style={{ padding:"5px 12px", background:"#2a78d6", color:"#fff", border:"none", borderRadius:6, fontSize:12, fontWeight:500, cursor:"pointer" }}>
+                        style={{ padding:"5px 12px", background:"#4f2fe0", color:"#fff", border:"none", borderRadius:6, fontSize:12, fontWeight:500, cursor:"pointer" }}>
                         👀 Review & approve
                       </button>
                     )}
@@ -331,7 +339,7 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
                   {["Cash","UPI","Bank transfer","Partial payment"].map(m=>(
                     <div key={m} onClick={()=>setManualMode(m)}
                       style={{ padding:"5px 12px", borderRadius:20, fontSize:12, cursor:"pointer", fontWeight:500,
-                        background: manualMode===m?"#2a78d6":"#f1f0ec",
+                        background: manualMode===m?"#4f2fe0":"#f1f0ec",
                         color:      manualMode===m?"#fff":"#52514e",
                         border:     manualMode===m?"none":"0.5px solid rgba(0,0,0,0.1)" }}>
                       {m}
@@ -343,9 +351,9 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
             <div style={{ marginBottom:14 }}>
               <div style={{ fontSize:12, fontWeight:500, color:"#52514e", marginBottom:6 }}>Receipt screenshot / PDF <span style={{color:"#e34948"}}>*</span></div>
               <div onClick={()=>fileRef.current.click()}
-                style={{ border:"1.5px dashed #2a78d6", borderRadius:8, padding:20, textAlign:"center", cursor:"pointer", background:"#e6f1fb" }}>
+                style={{ border:"1.5px dashed #4f2fe0", borderRadius:8, padding:20, textAlign:"center", cursor:"pointer", background:"#ebe7fd" }}>
                 {receiptFile
-                  ? <div style={{ fontSize:13, color:"#185fa5" }}>✅ {receiptFile.name}</div>
+                  ? <div style={{ fontSize:13, color:"#3a20b8" }}>✅ {receiptFile.name}</div>
                   : <><div style={{ fontSize:24, marginBottom:4 }}>📁</div><div style={{ fontSize:12, color:"#52514e" }}>Click to upload (JPG, PNG, PDF · max 5MB)</div></>
                 }
               </div>
@@ -359,9 +367,9 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
             </div>
             <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
               <button onClick={()=>setReceiptModal(null)} style={{ padding:"8px 16px", background:"#f1f0ec", border:"0.5px solid rgba(0,0,0,0.1)", borderRadius:8, fontSize:13, cursor:"pointer" }}>Cancel</button>
-              <button onClick={handleSubmitReceipt} disabled={submitting}
-                style={{ padding:"8px 16px", background:submitting?"#898781":"#2a78d6", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:500, cursor:"pointer" }}>
-                {submitting ? "Submitting…" : "Submit receipt"}
+              <button onClick={handleSubmitReceipt} disabled={!!busy}
+                style={{ padding:"8px 16px", background:busy?"#898781":"#4f2fe0", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:500, cursor:"pointer" }}>
+                {busy === "receipt" ? "Submitting…" : "Submit receipt"}
               </button>
             </div>
           </div>
@@ -377,14 +385,14 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
               <button onClick={()=>setApproveModal(null)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer", color:"#898781" }}>✕</button>
             </div>
             <div style={{ background:"#f8f7f4", borderRadius:8, padding:12, marginBottom:14 }}>
-              <div style={{ fontSize:13 }}><strong>{approveModal.from?.name}</strong> says they paid you <strong style={{color:"#2a78d6"}}>₹{approveModal.amount?.toLocaleString()}</strong></div>
+              <div style={{ fontSize:13 }}><strong>{approveModal.from?.name}</strong> says they paid you <strong style={{color:"#4f2fe0"}}>₹{approveModal.amount?.toLocaleString()}</strong></div>
               <div style={{ fontSize:11, color:"#898781", marginTop:4 }}>via {approveModal.paymentMode}</div>
             </div>
             {approveModal.receiptUrl ? (
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontSize:12, fontWeight:500, color:"#52514e", marginBottom:6 }}>Receipt submitted:</div>
-                <a href={`http://localhost:5000${approveModal.receiptUrl}`} target="_blank" rel="noreferrer"
-                  style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"8px 14px", background:"#e6f1fb", color:"#185fa5", borderRadius:8, fontSize:12, textDecoration:"none", fontWeight:500 }}>
+                <a href={`${API}${approveModal.receiptUrl}`} target="_blank" rel="noreferrer"
+                  style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"8px 14px", background:"#ebe7fd", color:"#3a20b8", borderRadius:8, fontSize:12, textDecoration:"none", fontWeight:500 }}>
                   📎 Open receipt →
                 </a>
                 {approveModal.receiptNote && <div style={{ fontSize:11, color:"#898781", marginTop:6 }}>Note: {approveModal.receiptNote}</div>}
@@ -403,13 +411,13 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
               ✅ Approving will lock all linked expenses 🔒 and email PDF receipts to both parties.
             </div>
             <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-              <button onClick={handleReject} disabled={submitting}
+              <button onClick={handleReject} disabled={!!busy}
                 style={{ padding:"8px 16px", background:"#fcebeb", color:"#a32d2d", border:"0.5px solid #e34948", borderRadius:8, fontSize:13, fontWeight:500, cursor:"pointer" }}>
-                ❌ Reject
+                {busy === "reject" ? "Rejecting…" : "❌ Reject"}
               </button>
-              <button onClick={handleApprove} disabled={submitting}
+              <button onClick={handleApprove} disabled={!!busy}
                 style={{ padding:"8px 16px", background:"#0ca30c", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:500, cursor:"pointer" }}>
-                {submitting ? "Processing…" : "✅ Approve & settle"}
+                {busy === "approve" ? "Approving…" : "✅ Approve & settle"}
               </button>
             </div>
           </div>

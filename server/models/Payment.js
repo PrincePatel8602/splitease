@@ -15,9 +15,9 @@ const paymentSchema = new mongoose.Schema({
   rejectedReason:    { type: String, default: "" },
   approvedAt:        { type: Date },
 
-  // ← NO enum restriction so it always saves correctly
   status: {
     type:    String,
+    enum:    ["pending_receipt", "receipt_submitted", "approved"],
     default: "pending_receipt",
   },
 

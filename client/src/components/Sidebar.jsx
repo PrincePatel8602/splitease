@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 const links = [
-  { to:"/Dashboard",        label:"Dashboard",     icon:"📊" },
+  { to:"/dashboard",        label:"Dashboard",     icon:"📊" },
   { to:"/groups",  label:"Groups",        icon:"👥" },
   { to:"/expenses",label:"Expenses",      icon:"🧾" },
   { to:"/settle",  label:"Settle Up",     icon:"⚡" },
@@ -12,18 +12,18 @@ const links = [
 export default function Sidebar() {
   const { user, logout } = useAuth();
   return (
-    <aside style={{ width:220, background:"#fff", borderRight:"0.5px solid rgba(0,0,0,0.1)", display:"flex", flexDirection:"column", flexShrink:0 }}>
+    <aside style={{ width:220, background:"rgba(255,255,255,0.55)", backdropFilter:"blur(14px)", borderRight:"1px solid rgba(255,255,255,0.6)", display:"flex", flexDirection:"column", flexShrink:0 }}>
       <div style={{ padding:16, borderBottom:"0.5px solid rgba(0,0,0,0.1)" }}>
-        <div style={{ fontSize:16, fontWeight:500, color:"#2a78d6" }}>💸 SplitEase</div>
+        <div style={{ fontSize:16, fontWeight:500, color:"#4f2fe0" }}>💸 SplitEase</div>
         <div style={{ fontSize:11, color:"#898781", marginTop:2 }}>Smart expense splitting</div>
       </div>
       <nav style={{ flex:1, padding:"8px 0" }}>
         {links.map(l => (
           <NavLink key={l.to} to={l.to} end={l.to==="/"} style={({ isActive }) => ({
             display:"flex", alignItems:"center", gap:8, padding:"8px 16px",
-            color: isActive ? "#2a78d6" : "#52514e",
-            background: isActive ? "#e6f1fb" : "transparent",
-            borderLeft: isActive ? "2px solid #2a78d6" : "2px solid transparent",
+            color: isActive ? "#4f2fe0" : "#52514e",
+            background: isActive ? "#ebe7fd" : "transparent",
+            borderLeft: isActive ? "2px solid #4f2fe0" : "2px solid transparent",
             fontWeight: isActive ? 500 : 400, fontSize:13, transition:"all 0.15s"
           })}>
             <span>{l.icon}</span>{l.label}

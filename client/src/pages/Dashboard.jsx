@@ -1,40 +1,51 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import axios from "axios";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import ExpenseCard from "../components/ExpenseCard";
+import { getCache, setCache } from "../utils/cache";
+
+// Chart library loads only when needed → faster first paint
+const SpendingChart = lazy(() => import("../components/SpendingChart"));
 
 const CAT_ICON  = { Food:"🍔", Travel:"✈️", Rent:"🏠", Entertainment:"🎬", Shopping:"🛒", Utilities:"💡", Other:"📦" };
-const CAT_COLOR = { Food:"#e34948", Travel:"#2a78d6", Rent:"#eda100", Entertainment:"#4a3aa7", Shopping:"#1baf7a", Utilities:"#898781", Other:"#e87ba4" };
+const CAT_COLOR = { Food:"#e34948", Travel:"#4f2fe0", Rent:"#eda100", Entertainment:"#4a3aa7", Shopping:"#1baf7a", Utilities:"#898781", Other:"#e87ba4" };
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [expenses,  setExpenses]  = useState([]);
-  const [balances,  setBalances]  = useState([]);
-  const [optimized, setOptimized] = useState([]);
-  const [groups,    setGroups]    = useState([]);
+  const cacheKey = `dash:${user._id}`;
+  const cached   = getCache(cacheKey);
+  const [expenses,  setExpenses]  = useState(cached?.expenses  || []);
+  const [balances,  setBalances]  = useState(cached?.balances  || []);
+  const [optimized, setOptimized] = useState(cached?.optimized || []);
+  const [groups,    setGroups]    = useState(cached?.groups    || []);
+  const [stats,     setStats]     = useState(cached?.stats     || []);
   const [members,   setMembers]   = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ description:"", amount:"", category:"Food", groupId:"", paidBy:"", splitBetween:[], paymentMode:"UPI" });
   const [aiTag,   setAiTag]   = useState(null);
   const [toast,   setToast]   = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached);   // spinner only on first visit
 
   useEffect(() => { fetchAll(); }, []);
 
+  // Silent refresh: shows cached data instantly, updates when fresh data arrives
   const fetchAll = async () => {
-    setLoading(true);
     try {
-      const [eRes, gRes, bRes, oRes] = await Promise.all([
+      const [eRes, gRes, bRes, oRes, sRes] = await Promise.all([
         axios.get("/api/expenses?limit=10"),
         axios.get("/api/groups"),
         axios.get("/api/expenses/balances"),
         axios.get("/api/expenses/optimize"),
+        axios.get("/api/expenses/stats").catch(() => ({ data: [] })),
       ]);
       setExpenses(eRes.data);
       setGroups(gRes.data);
       setBalances(bRes.data);
       setOptimized(oRes.data);
+      setStats(sRes.data);
+      setCache(cacheKey, { expenses: eRes.data, groups: gRes.data, balances: bRes.data, optimized: oRes.data, stats: sRes.data });
     } catch (e) {
       console.error(e);
     } finally {
@@ -110,7 +121,7 @@ export default function Dashboard() {
       <Navbar title="Dashboard" subtitle="Your financial overview"
         action={
           <button onClick={()=>setShowModal(true)}
-            style={{ padding:"8px 16px", background:"#2a78d6", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:500, cursor:"pointer" }}>
+            style={{ padding:"8px 16px", background:"#4f2fe0", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:500, cursor:"pointer" }}>
             + Add expense
           </button>
         }
@@ -121,9 +132,9 @@ export default function Dashboard() {
         {[
           { label:"YOU OWE",      val: youOwe,    color:"#a32d2d", sub: balances.filter(b=>b.amount<0).map(b=>`${b.name}: ₹${Math.abs(b.amount)}`).join(", ")||"Nothing 🎉" },
           { label:"OWED TO YOU",  val: owedToYou, color:"#3B6D11", sub: balances.filter(b=>b.amount>0).map(b=>`${b.name}: ₹${b.amount}`).join(", ")||"No one owes you" },
-          { label:"THIS MONTH",   val: thisMonth, color:"#185fa5", sub:`${expenses.filter(e=>{ const d=new Date(e.createdAt),n=new Date(); return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear(); }).length} expenses` },
+          { label:"THIS MONTH",   val: thisMonth, color:"#3a20b8", sub:`${expenses.filter(e=>{ const d=new Date(e.createdAt),n=new Date(); return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear(); }).length} expenses` },
         ].map(c => (
-          <div key={c.label} style={{ background:"#fff", border:"0.5px solid rgba(0,0,0,0.1)", borderRadius:10, padding:16 }}>
+          <div key={c.label} className="card" style={{ marginBottom:0 }}>
             <div style={{ fontSize:11, fontWeight:500, color:"#898781", letterSpacing:"0.5px" }}>{c.label}</div>
             <div style={{ fontSize:26, fontWeight:500, color:c.color, margin:"6px 0 4px" }}>₹{c.val.toLocaleString()}</div>
             <div style={{ fontSize:11, color:"#898781", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.sub}</div>
@@ -131,9 +142,17 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {/* ── Spending chart ── */}
+      <div className="card">
+        <div style={{ fontSize:13, fontWeight:500, color:"#52514e", marginBottom:8 }}>📈 My spending</div>
+        <Suspense fallback={<div style={{ height:220 }} />}>
+          <SpendingChart rows={stats} groups={groups} />
+        </Suspense>
+      </div>
+
       {/* ── Who owes who ── */}
       {balances.length > 0 && (
-        <div style={{ background:"#fff", border:"0.5px solid rgba(0,0,0,0.1)", borderRadius:10, padding:16, marginBottom:16 }}>
+        <div className="card">
           <div style={{ fontSize:13, fontWeight:500, color:"#52514e", marginBottom:12 }}>💰 Balances</div>
           {balances.map(b => (
             <div key={b.userId} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:"0.5px solid #f1f0ec" }}>
@@ -153,15 +172,31 @@ export default function Dashboard() {
 
       {/* ── Debt simplification ── */}
       {optimized.length > 0 && (
-        <div style={{ background:"linear-gradient(135deg,#e6f1fb,#eaf3de)", border:"0.5px solid #2a78d6", borderRadius:10, padding:14, marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
-          <span style={{ fontSize:22 }}>🧮</span>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:13, fontWeight:500, color:"#185fa5" }}>Debt simplification available</div>
-            <div style={{ fontSize:11, color:"#52514e", marginTop:2 }}>Reduce to {optimized.length} optimized transaction{optimized.length>1?"s":""}</div>
+        <div className="card" style={{ border:"1px solid rgba(79,47,224,0.35)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
+            <span style={{ fontSize:22 }}>🧮</span>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:600, color:"#3a20b8" }}>Debt simplification</div>
+              <div style={{ fontSize:11, color:"#52514e", marginTop:2 }}>
+                Fewest payments needed to settle everyone: {optimized.length}
+              </div>
+            </div>
+            <Link to="/settle" style={{ padding:"6px 14px", background:"#4f2fe0", color:"#fff", borderRadius:10, fontSize:12, fontWeight:500, textDecoration:"none" }}>
+              Settle up →
+            </Link>
           </div>
-          <a href="/settle" style={{ padding:"6px 14px", background:"#2a78d6", color:"#fff", borderRadius:7, fontSize:12, fontWeight:500, textDecoration:"none" }}>
-            Settle up →
-          </a>
+          {optimized.map((o, i) => {
+            const iPay = o.from === user._id;
+            return (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderTop:"1px solid rgba(0,0,0,0.06)", fontSize:13 }}>
+                <span style={{ flex:1 }}>
+                  <strong>{iPay ? "You" : o.fromName}</strong> pay{iPay ? "" : "s"} <strong>{o.to === user._id ? "you" : o.toName}</strong>
+                </span>
+                {o.pending && <span style={{ fontSize:10, background:"#faeeda", color:"#854f0b", padding:"2px 8px", borderRadius:20 }}>⏳ payment pending</span>}
+                <strong style={{ color: iPay ? "#a32d2d" : "#3B6D11" }}>₹{o.amount.toLocaleString()}</strong>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -199,8 +234,8 @@ export default function Dashboard() {
                 style={{ width:"100%", padding:"8px 10px", border:"0.5px solid rgba(0,0,0,0.2)", borderRadius:8, fontSize:13, outline:"none" }} />
               {aiTag && (
                 <div style={{ marginTop:6, display:"flex", gap:6 }}>
-                  <span style={{ background:"#e6f1fb", color:"#185fa5", padding:"2px 10px", borderRadius:20, fontSize:11 }}>🤖 {aiTag.cat}</span>
-                  <span style={{ background:"#e6f1fb", color:"#185fa5", padding:"2px 10px", borderRadius:20, fontSize:11 }}>{aiTag.type}</span>
+                  <span style={{ background:"#ebe7fd", color:"#3a20b8", padding:"2px 10px", borderRadius:20, fontSize:11 }}>🤖 {aiTag.cat}</span>
+                  <span style={{ background:"#ebe7fd", color:"#3a20b8", padding:"2px 10px", borderRadius:20, fontSize:11 }}>{aiTag.type}</span>
                 </div>
               )}
             </div>
@@ -255,7 +290,7 @@ export default function Dashboard() {
                     return (
                       <div key={m._id} onClick={()=>toggleSplit(m._id)}
                         style={{ padding:"5px 12px", borderRadius:20, fontSize:12, cursor:"pointer", fontWeight:500,
-                          background: selected ? "#2a78d6" : "#f1f0ec",
+                          background: selected ? "#4f2fe0" : "#f1f0ec",
                           color:      selected ? "#fff"    : "#52514e",
                           border:     selected ? "none"    : "0.5px solid rgba(0,0,0,0.1)" }}>
                         {m.name}{m._id===user._id?" (you)":""}
@@ -286,7 +321,7 @@ export default function Dashboard() {
                 Cancel
               </button>
               <button onClick={addExpense}
-                style={{ padding:"8px 16px", background:"#2a78d6", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:500, cursor:"pointer" }}>
+                style={{ padding:"8px 16px", background:"#4f2fe0", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:500, cursor:"pointer" }}>
                 Add expense
               </button>
             </div>

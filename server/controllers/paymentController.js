@@ -7,10 +7,18 @@ const { generateReceiptPDF }    = require("../utils/pdfGenerator");
 // ─── Record Payment ───────────────────────────────────────────────────────────
 exports.recordPayment = async (req, res) => {
   try {
-    const { fromUserId, toUserId, amount, paymentMode, expenseIds, razorpayOrderId, razorpayPaymentId } = req.body;
-    const isRazorpay = paymentMode === "Razorpay";
+    const { toUserId, amount, paymentMode, expenseIds } = req.body;
 
-    console.log(`[recordPayment] from=${fromUserId} to=${toUserId} mode=${paymentMode} isRazorpay=${isRazorpay}`);
+    // Online (Razorpay) payments are created ONLY in razorpayController.verifyPayment
+    // (after signature check). Never trust the client for this.
+    if (paymentMode === "Razorpay")
+      return res.status(400).json({ error: "Use Razorpay checkout for online payments" });
+
+    if (!toUserId || !amount || Number(amount) <= 0)
+      return res.status(400).json({ error: "Receiver and a valid amount are required" });
+
+    // The payer is always the logged-in user
+    const fromUserId = req.user._id;
 
     // Block duplicate pending payments
     const duplicate = await Payment.findOne({
@@ -19,27 +27,18 @@ exports.recordPayment = async (req, res) => {
       status: { $in: ["pending_receipt", "receipt_submitted"] },
     });
     if (duplicate) {
-      console.log(`[recordPayment] DUPLICATE FOUND: ${duplicate._id} status=${duplicate.status}`);
       return res.status(400).json({ error: "You already have a pending payment with this person. Upload your receipt first." });
     }
 
+    // Status is ALWAYS pending_receipt. Only approvePayment() can set "approved".
     const payment = await Payment.create({
-      from:              fromUserId,
-      to:                toUserId,
-      amount,
-      paymentMode:       paymentMode || "Cash",
-      expenses:          expenseIds || [],
-      razorpayOrderId:   razorpayOrderId || "",
-      razorpayPaymentId: razorpayPaymentId || "",
-      status:            isRazorpay ? "approved" : "pending_receipt",
-      approvedAt:        isRazorpay ? new Date() : undefined,
+      from:        fromUserId,
+      to:          toUserId,
+      amount:      Number(amount),
+      paymentMode: paymentMode || "Cash",
+      expenses:    expenseIds || [],
+      status:      "pending_receipt",
     });
-
-    console.log(`[recordPayment] Created payment ${payment._id} with status=${payment.status}`);
-
-    if (isRazorpay) {
-      await lockExpensesBetweenUsers(fromUserId, toUserId, expenseIds || []);
-    }
 
     res.status(201).json({ success: true, payment });
   } catch (err) {
@@ -53,7 +52,7 @@ exports.getPayments = async (req, res) => {
   try {
     const payments = await Payment.find({
       $or: [{ from: req.user._id }, { to: req.user._id }]
-    }).populate("from to", "name email").sort({ createdAt: -1 });
+    }).populate("from to", "name email").sort({ createdAt: -1 }).lean();
     res.json(payments);
   } catch (err) {
     res.status(500).json({ error: err.message });

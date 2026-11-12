@@ -40,7 +40,8 @@ exports.getExpenses = async (req, res) => {
       .populate("paidBy splitBetween", "name email")
       .populate("group", "name icon")
       .sort({ createdAt: -1 })
-      .skip((page - 1) * limit).limit(Number(limit));
+      .skip((page - 1) * limit).limit(Number(limit))
+      .lean();
     res.json(expenses);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -68,7 +69,7 @@ exports.getMyBalances = async (req, res) => {
       settled: false,
       locked:  false,
       $or: [{ paidBy: req.user._id }, { splitBetween: req.user._id }],
-    }).populate("paidBy splitBetween", "name email");
+    }).populate("paidBy splitBetween", "name email").lean();
 
     const balance = {};
     const names   = {};
@@ -106,58 +107,87 @@ exports.getMyBalances = async (req, res) => {
   }
 };
 
-// ─── Get Optimized Settlements ─────────────────────────────────────────────────
-// Only show transactions where there is NO approved/pending payment already
+// ─── Spending stats for chart (last 12 months, my share per month/category/group) ─────────
+exports.getStats = async (req, res) => {
+  try {
+    const since = new Date();
+    since.setMonth(since.getMonth() - 11);
+    since.setDate(1);
+    since.setHours(0, 0, 0, 0);
+
+    const rows = await Expense.aggregate([
+      { $match: { createdAt: { $gte: since }, splitBetween: req.user._id } },
+      { $group: {
+          _id: {
+            m: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
+            c: "$category",
+            g: "$group",
+          },
+          total: { $sum: { $divide: ["$amount", { $size: "$splitBetween" }] } },
+      } },
+      { $sort: { "_id.m": 1 } },
+    ]);
+
+    res.json(rows.map(r => ({ month: r._id.m, category: r._id.c, group: String(r._id.g), total: Math.round(r.total) })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── Get Optimized Settlements (debt simplification) ───────────────────────────
+// Uses ALL unsettled expenses of every group I belong to (not only my own),
+// so the minimum number of payments can really be found.
 exports.getOptimizedSettlements = async (req, res) => {
   try {
     const myId = req.user._id.toString();
     const { groupId } = req.query;
 
-    // Get unsettled expenses involving current user
-    const filter = {
+    // 1. Groups I am a member of
+    const groupFilter = { members: req.user._id };
+    if (groupId) groupFilter._id = groupId;
+    const groups = await Group.find(groupFilter).select("_id").lean();
+    if (!groups.length) return res.json([]);
+
+    // 2. Every open expense in those groups
+    const expenses = await Expense.find({
+      group:   { $in: groups.map(g => g._id) },
       settled: false,
       locked:  false,
-      $or: [{ paidBy: req.user._id }, { splitBetween: req.user._id }],
-    };
-    if (groupId) filter.group = groupId;
-
-    const expenses = await Expense.find(filter);
+    }).lean();
     if (!expenses.length) return res.json([]);
 
+    // 3. Minimum payments for everyone
     const allPayments = simplifyDebts(expenses);
     if (!allPayments.length) return res.json([]);
 
-    // Get names
+    // 4. Names
     const userIds = [...new Set(allPayments.flatMap(p => [p.from, p.to]))];
-    const users   = await User.find({ _id: { $in: userIds } }, "name");
+    const users   = await User.find({ _id: { $in: userIds } }, "name").lean();
     const userMap = Object.fromEntries(users.map(u => [u._id.toString(), u.name]));
 
-    // Get ALL non-rejected payments involving current user
-    // (pending_receipt, receipt_submitted, approved all hide the transaction)
-    const existingPayments = await Payment.find({
-      status: { $in: ["pending_receipt", "receipt_submitted", "approved"] },
+    // 5. Payments still waiting for receipt / approval → mark as "pending"
+    //    (approved ones are NOT hidden: their expenses are already locked,
+    //     so they never appear here again, and new debts must still show)
+    const pendingPayments = await Payment.find({
+      status: { $in: ["pending_receipt", "receipt_submitted"] },
       $or: [{ from: req.user._id }, { to: req.user._id }],
+    }).lean();
+    const pendingPairs = new Set();
+    pendingPayments.forEach(p => {
+      pendingPairs.add(`${p.from}_${p.to}`);
+      pendingPairs.add(`${p.to}_${p.from}`);
     });
 
-    // Build set of settled user pairs (both directions)
-    const settledPairs = new Set();
-    existingPayments.forEach(p => {
-      const a = p.from.toString();
-      const b = p.to.toString();
-      settledPairs.add(`${a}_${b}`);
-      settledPairs.add(`${b}_${a}`);
-    });
-
-    // Only show transactions involving current user AND not already paid
+    // 6. Only the transactions that involve me
     const result = allPayments
       .filter(p => p.from === myId || p.to === myId)
-      .filter(p => !settledPairs.has(`${p.from}_${p.to}`))
       .map(p => ({
         from:     p.from,
         to:       p.to,
         fromName: userMap[p.from] || "Unknown",
         toName:   userMap[p.to]   || "Unknown",
         amount:   p.amount,
+        pending:  pendingPairs.has(`${p.from}_${p.to}`),
       }));
 
     res.json(result);

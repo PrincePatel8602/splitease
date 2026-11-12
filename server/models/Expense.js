@@ -14,4 +14,9 @@ const expenseSchema = new mongoose.Schema({
   notes:         { type: String, default: "" },
 }, { timestamps: true });
 
+
+expenseSchema.index({ splitBetween: 1, createdAt: -1 });
+expenseSchema.index({ paidBy: 1, createdAt: -1 });
+expenseSchema.index({ group: 1, createdAt: -1 });
+
 module.exports = mongoose.model("Expense", expenseSchema);
