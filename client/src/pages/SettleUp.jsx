@@ -152,7 +152,7 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
   };
 
   return (
-    <div style={{ padding:24 }}>
+    <div className="page">
       <Navbar title="Settle up" subtitle="Clear your debts" />
 
       {loading ? <div style={{ textAlign:"center", padding:40, color:"#898781" }}>Loading…</div> : <>
@@ -324,7 +324,7 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
       {/* ── Upload Receipt Modal ── */}
       {receiptModal && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={e=>e.target===e.currentTarget&&setReceiptModal(null)}>
-          <div style={{ background:"#fff", borderRadius:12, padding:24, width:420 }}>
+          <div style={{ background:"#fff", borderRadius:12, padding:24, width:"calc(100% - 24px)", maxWidth:420 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
               <div style={{ fontSize:16, fontWeight:500 }}>{receiptModal.isManualSettle ? "🏦 Settle manually" : "📤 Upload receipt"}</div>
               <button onClick={()=>setReceiptModal(null)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer", color:"#898781" }}>✕</button>
@@ -379,7 +379,7 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
       {/* ── Approve / Reject Modal ── */}
       {approveModal && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={e=>e.target===e.currentTarget&&setApproveModal(null)}>
-          <div style={{ background:"#fff", borderRadius:12, padding:24, width:440 }}>
+          <div style={{ background:"#fff", borderRadius:12, padding:24, width:"calc(100% - 24px)", maxWidth:440 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
               <div style={{ fontSize:16, fontWeight:500 }}>👀 Review payment receipt</div>
               <button onClick={()=>setApproveModal(null)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer", color:"#898781" }}>✕</button>
@@ -432,3 +432,5 @@ const iOweList = balances.filter(b => b.amount < 0 && !pendingSettleUserIds.has(
     </div>
   );
 }
+
+

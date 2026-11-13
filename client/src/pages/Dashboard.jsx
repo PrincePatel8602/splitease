@@ -23,7 +23,7 @@ export default function Dashboard() {
   const [stats,     setStats]     = useState(cached?.stats     || []);
   const [members,   setMembers]   = useState([]);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ description:"", amount:"", category:"Food", groupId:"", paidBy:"", splitBetween:[], paymentMode:"UPI" });
+  const [form, setForm] = useState({ description:"", amount:"", category:"Food", groupId:"", paidBy:"", splitBetween:[], paymentMode: user?.defaultPaymentMode || "UPI" });
   const [aiTag,   setAiTag]   = useState(null);
   const [toast,   setToast]   = useState("");
   const [loading, setLoading] = useState(!cached);   // spinner only on first visit
@@ -104,7 +104,7 @@ export default function Dashboard() {
         splitBetween: splitList,
       });
       setShowModal(false);
-      setForm({ description:"", amount:"", category:"Food", groupId:"", paidBy:"", splitBetween:[], paymentMode:"UPI" });
+      setForm({ description:"", amount:"", category:"Food", groupId:"", paidBy:"", splitBetween:[], paymentMode: user?.defaultPaymentMode || "UPI" });
       setAiTag(null);
       fetchAll();
       showToastMsg("Expense added ✓");
@@ -117,7 +117,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div style={{ padding:24 }}>
+    <div className="page">
       <Navbar title="Dashboard" subtitle="Your financial overview"
         action={
           <button onClick={()=>setShowModal(true)}
@@ -128,7 +128,7 @@ export default function Dashboard() {
       />
 
       {/* ── Summary Cards ── */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:20 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:20 }}>
         {[
           { label:"YOU OWE",      val: youOwe,    color:"#a32d2d", sub: balances.filter(b=>b.amount<0).map(b=>`${b.name}: ₹${Math.abs(b.amount)}`).join(", ")||"Nothing 🎉" },
           { label:"OWED TO YOU",  val: owedToYou, color:"#3B6D11", sub: balances.filter(b=>b.amount>0).map(b=>`${b.name}: ₹${b.amount}`).join(", ")||"No one owes you" },
@@ -220,7 +220,7 @@ export default function Dashboard() {
       {showModal && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center" }}
           onClick={e=>e.target===e.currentTarget&&setShowModal(false)}>
-          <div style={{ background:"#fff", borderRadius:12, padding:24, width:460, maxHeight:"88vh", overflowY:"auto" }}>
+          <div style={{ background:"#fff", borderRadius:12, padding:24, width:"calc(100% - 24px)", maxWidth:460, maxHeight:"88vh", overflowY:"auto" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
               <div style={{ fontSize:16, fontWeight:500 }}>Add expense</div>
               <button onClick={()=>setShowModal(false)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer", color:"#898781" }}>✕</button>

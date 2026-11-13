@@ -9,18 +9,18 @@ const links = [
   { to:"/profile", label:"Profile",       icon:"👤" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ open = false, onClose = () => {} }) {
   const { user, logout } = useAuth();
   return (
-    <aside style={{ width:220, background:"rgba(255,255,255,0.55)", backdropFilter:"blur(14px)", borderRight:"1px solid rgba(255,255,255,0.6)", display:"flex", flexDirection:"column", flexShrink:0 }}>
+    <aside className={"sidebar" + (open ? " open" : "")}>
       <div style={{ padding:16, borderBottom:"0.5px solid rgba(0,0,0,0.1)" }}>
         <div style={{ fontSize:16, fontWeight:500, color:"#4f2fe0" }}>💸 SplitEase</div>
         <div style={{ fontSize:11, color:"#898781", marginTop:2 }}>Smart expense splitting</div>
       </div>
       <nav style={{ flex:1, padding:"8px 0" }}>
         {links.map(l => (
-          <NavLink key={l.to} to={l.to} end={l.to==="/"} style={({ isActive }) => ({
-            display:"flex", alignItems:"center", gap:8, padding:"8px 16px",
+          <NavLink key={l.to} to={l.to} end={l.to==="/"} onClick={onClose} style={({ isActive }) => ({
+            display:"flex", alignItems:"center", gap:8, padding:"11px 16px",
             color: isActive ? "#4f2fe0" : "#52514e",
             background: isActive ? "#ebe7fd" : "transparent",
             borderLeft: isActive ? "2px solid #4f2fe0" : "2px solid transparent",

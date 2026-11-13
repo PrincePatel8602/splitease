@@ -118,7 +118,7 @@ export default function Expenses() {
   }))].sort().reverse();
 
   return (
-    <div style={{ padding:24 }}>
+    <div className="page">
       <Navbar title="Expenses" subtitle="All your transactions"
         action={
           <div style={{ display:"flex", gap:8 }}>
@@ -233,7 +233,7 @@ export default function Expenses() {
       {/* ── Add Expense Modal ── */}
       {showAdd && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={e=>e.target===e.currentTarget&&setShowAdd(false)}>
-          <div style={{ background:"#fff", borderRadius:12, padding:24, width:460, maxHeight:"90vh", overflowY:"auto" }}>
+          <div style={{ background:"#fff", borderRadius:12, padding:24, width:"calc(100% - 24px)", maxWidth:460, maxHeight:"90vh", overflowY:"auto" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
               <div style={{ fontSize:16, fontWeight:500 }}>Add expense</div>
               <button onClick={()=>setShowAdd(false)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer", color:"#898781" }}>✕</button>
@@ -356,7 +356,7 @@ export default function Expenses() {
       {/* Confirm Delete */}
       {confirmDelete && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <div style={{ background:"#fff", borderRadius:12, padding:24, width:340 }}>
+          <div style={{ background:"#fff", borderRadius:12, padding:24, width:"calc(100% - 24px)", maxWidth:340 }}>
             <div style={{ fontSize:16, fontWeight:500, marginBottom:8 }}>🗑 Delete expense?</div>
             <div style={{ fontSize:13, color:"#52514e", marginBottom:16 }}>
               "<strong>{confirmDelete.name}</strong>" will be permanently deleted.

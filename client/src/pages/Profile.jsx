@@ -1,63 +1,96 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 
 export default function Profile() {
-  const { user, logout } = useAuth();
-  const [form, setForm] = useState({ defaultPaymentMode: user?.defaultPaymentMode||"UPI", emailNotifications: user?.emailNotifications||"All expenses" });
-  const [toast, setToast] = useState("");
+  const { user, logout, updateUser } = useAuth();
+  const [form, setForm] = useState({
+    name:               user?.name || "",
+    phone:              user?.phone || "",
+    defaultPaymentMode: user?.defaultPaymentMode || "UPI",
+    emailNotifications: user?.emailNotifications || "All expenses",
+  });
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast]   = useState(null);
+
+  // Whenever the saved user changes, show the saved values (not defaults)
+  useEffect(() => {
+    if (!user) return;
+    setForm({
+      name:               user.name || "",
+      phone:              user.phone || "",
+      defaultPaymentMode: user.defaultPaymentMode || "UPI",
+      emailNotifications: user.emailNotifications || "All expenses",
+    });
+  }, [user?.name, user?.phone, user?.defaultPaymentMode, user?.emailNotifications]);
+
+  const showToast = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2500); };
 
   const save = async () => {
-    try { await axios.put("/api/auth/me", form); setToast("Saved ✓"); setTimeout(()=>setToast(""),2000); }
-    catch { setToast("Error saving"); setTimeout(()=>setToast(""),2000); }
+    setSaving(true);
+    try {
+      const { data } = await axios.put("/api/auth/me", form);
+      updateUser(data);                    // ← keeps the app in sync, so it stays saved
+      showToast("Preferences saved ✓");
+    } catch (e) {
+      showToast(e.response?.data?.error || "Error saving", "error");
+    } finally { setSaving(false); }
   };
 
+  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+  const initials = user?.name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+
   return (
-    <div style={{ padding:24 }}>
+    <div className="page">
       <Navbar title="Profile" subtitle="Account & preferences" />
 
-      <div style={{ background:"#fff", border:"0.5px solid rgba(0,0,0,0.1)", borderRadius:12, padding:20, marginBottom:12 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
-          <div style={{ width:52, height:52, borderRadius:"50%", background:"#e6f1fb", color:"#185fa5", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:500 }}>
-            {user?.name?.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}
+      <div className="card">
+        <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:18 }}>
+          <div style={{ width:56, height:56, borderRadius:"50%", background:"linear-gradient(135deg,#4f2fe0,#6fdcf5)", color:"#fff",
+                        display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:600 }}>{initials}</div>
+          <div>
+            <div style={{ fontWeight:600, fontSize:16 }}>{user?.name}</div>
+            <div style={{ color:"#52514e", fontSize:13 }}>{user?.email}</div>
+          </div>
+        </div>
+
+        <div style={{ fontSize:13, fontWeight:600, color:"#52514e", margin:"4px 0 12px" }}>Account</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12, marginBottom:18 }}>
+          <div><label className="label">Name</label><input className="input" value={form.name} onChange={set("name")} /></div>
+          <div><label className="label">Phone</label><input className="input" value={form.phone} onChange={set("phone")} placeholder="Optional" /></div>
+        </div>
+
+        <div style={{ fontSize:13, fontWeight:600, color:"#52514e", marginBottom:12 }}>Preferences</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12, marginBottom:20 }}>
+          <div>
+            <label className="label">Default payment mode</label>
+            <select className="input" value={form.defaultPaymentMode} onChange={set("defaultPaymentMode")}>
+              {["UPI","Cash","Bank transfer"].map(m => <option key={m}>{m}</option>)}
+            </select>
           </div>
           <div>
-            <div style={{ fontWeight:500, fontSize:15 }}>{user?.name}</div>
-            <div style={{ color:"#898781", fontSize:13 }}>{user?.email}</div>
+            <label className="label">Email notifications</label>
+            <select className="input" value={form.emailNotifications} onChange={set("emailNotifications")}>
+              {["All expenses","Only settlements","None"].map(m => <option key={m}>{m}</option>)}
+            </select>
           </div>
         </div>
 
-        <div style={{ height:"0.5px", background:"rgba(0,0,0,0.1)", margin:"0 0 16px" }} />
-
-        <div style={{ fontSize:13, fontWeight:500, color:"#52514e", marginBottom:12 }}>Preferences</div>
-
-        <div style={{ marginBottom:14 }}>
-          <div style={{ fontSize:12, fontWeight:500, color:"#52514e", marginBottom:5 }}>Default payment mode</div>
-          <select value={form.defaultPaymentMode} onChange={e=>setForm(f=>({...f,defaultPaymentMode:e.target.value}))}
-            style={{ width:"100%", padding:"8px 10px", border:"0.5px solid rgba(0,0,0,0.2)", borderRadius:8, fontSize:13, outline:"none" }}>
-            {["UPI","Cash","Bank transfer"].map(m=><option key={m}>{m}</option>)}
-          </select>
-        </div>
-
-        <div style={{ marginBottom:16 }}>
-          <div style={{ fontSize:12, fontWeight:500, color:"#52514e", marginBottom:5 }}>Email notifications</div>
-          <select value={form.emailNotifications} onChange={e=>setForm(f=>({...f,emailNotifications:e.target.value}))}
-            style={{ width:"100%", padding:"8px 10px", border:"0.5px solid rgba(0,0,0,0.2)", borderRadius:8, fontSize:13, outline:"none" }}>
-            {["All expenses","Only settlements","None"].map(m=><option key={m}>{m}</option>)}
-          </select>
-        </div>
-
-        <div style={{ display:"flex", gap:8 }}>
-          <button onClick={save} style={{ padding:"7px 14px", background:"#2a78d6", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:500, cursor:"pointer" }}>Save preferences</button>
-          <button onClick={logout} style={{ padding:"7px 14px", background:"#fcebeb", color:"#a32d2d", border:"0.5px solid #e34948", borderRadius:8, fontSize:13, cursor:"pointer" }}>Sign out</button>
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={save} disabled={saving} className="btn-primary" style={{ opacity: saving ? 0.7 : 1 }}>
+            {saving ? "Saving…" : "Save preferences"}
+          </button>
+          <button onClick={logout} style={{ padding:"10px 18px", background:"#fcebeb", color:"#a32d2d", border:"1px solid #e34948", borderRadius:14, fontSize:13, fontWeight:500 }}>
+            Sign out
+          </button>
         </div>
       </div>
 
-      <div style={{ background:"#fff", border:"0.5px solid rgba(0,0,0,0.1)", borderRadius:12, padding:20 }}>
-        <div style={{ fontSize:13, fontWeight:500, color:"#52514e", marginBottom:12 }}>About SplitEase</div>
-        <div style={{ fontSize:12, color:"#898781", lineHeight:1.8 }}>
-          ✅ Smart debt simplification (graph optimization)<br/>
+      <div className="card">
+        <div style={{ fontSize:13, fontWeight:600, color:"#52514e", marginBottom:12 }}>About SplitEase</div>
+        <div style={{ fontSize:12, color:"#52514e", lineHeight:1.9 }}>
+          ✅ Smart debt simplification<br/>
           📧 Email notifications via Gmail SMTP<br/>
           📄 PDF receipts with QR verification<br/>
           🔒 Expense locking after settlement<br/>
@@ -67,7 +100,10 @@ export default function Profile() {
         </div>
       </div>
 
-      {toast && <div style={{ position:"fixed", bottom:16, right:16, background:"#0b0b0b", color:"#fff", padding:"10px 16px", borderRadius:8, fontSize:13, zIndex:200 }}>{toast}</div>}
+      {toast && (
+        <div style={{ position:"fixed", bottom:16, right:16, background: toast.type === "error" ? "#a32d2d" : "#0b0b0b", color:"#fff",
+                      padding:"10px 16px", borderRadius:12, fontSize:13, zIndex:200 }}>{toast.msg}</div>
+      )}
     </div>
   );
 }

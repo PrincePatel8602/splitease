@@ -97,7 +97,7 @@ export default function Groups() {
   // ── Confirm Delete Modal ──────────────────────────────────────────────────
   const ConfirmModal = () => !confirmDelete ? null : (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <div style={{ background:"#fff", borderRadius:12, padding:24, width:360 }}>
+      <div style={{ background:"#fff", borderRadius:12, padding:24, width:"calc(100% - 24px)", maxWidth:360 }}>
         <div style={{ fontSize:16, fontWeight:500, marginBottom:8 }}>
           {confirmDelete.type === "group" ? "🗑 Delete group?" : "🗑 Delete expense?"}
         </div>
@@ -132,7 +132,7 @@ export default function Groups() {
 
   // ── Group Detail View ─────────────────────────────────────────────────────
   if (selected) return (
-    <div style={{ padding:24 }}>
+    <div className="page">
       <ConfirmModal />
 
       {/* Header */}
@@ -157,7 +157,7 @@ export default function Groups() {
       </div>
 
       {/* Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:20 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:20 }}>
         {[
           { label:"TOTAL SPENT", val:`₹${totalSpent.toLocaleString()}`, color:"#185fa5" },
           { label:"EXPENSES",    val:groupExp.length,                    color:"#52514e" },
@@ -234,7 +234,7 @@ export default function Groups() {
       {/* Add Expense Modal */}
       {showAddExp && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={e=>e.target===e.currentTarget&&setShowAddExp(false)}>
-          <div style={{ background:"#fff", borderRadius:12, padding:24, width:440, maxHeight:"85vh", overflowY:"auto" }}>
+          <div style={{ background:"#fff", borderRadius:12, padding:24, width:"calc(100% - 24px)", maxWidth:440, maxHeight:"85vh", overflowY:"auto" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
               <div style={{ fontSize:16, fontWeight:500 }}>Add expense to {selected.name}</div>
               <button onClick={()=>setShowAddExp(false)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer" }}>✕</button>
@@ -297,7 +297,7 @@ export default function Groups() {
 
   // ── Groups List ───────────────────────────────────────────────────────────
   return (
-    <div style={{ padding:24 }}>
+    <div className="page">
       <ConfirmModal />
       <Navbar title="Groups" subtitle="Manage your split groups"
         action={<button onClick={()=>setShowCreate(true)} style={{ padding:"7px 14px", background:"#2a78d6", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:500, cursor:"pointer" }}>+ Create group</button>} />
@@ -341,7 +341,7 @@ export default function Groups() {
       {/* Create Group Modal */}
       {showCreate && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={e=>e.target===e.currentTarget&&setShowCreate(false)}>
-          <div style={{ background:"#fff", borderRadius:12, padding:24, width:420 }}>
+          <div style={{ background:"#fff", borderRadius:12, padding:24, width:"calc(100% - 24px)", maxWidth:420 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
               <div style={{ fontSize:16, fontWeight:500 }}>Create group</div>
               <button onClick={()=>setShowCreate(false)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer" }}>✕</button>

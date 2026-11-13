@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import Login      from "./pages/Login";
 import Register   from "./pages/Register";
@@ -10,14 +11,32 @@ import Profile    from "./pages/Profile";
 import Navbar     from "./components/Navbar";
 import Sidebar    from "./components/Sidebar";
 
-function PrivateLayout({ children }) {
+function PrivateLayout() {
   const { user, loading } = useAuth();
-  if (loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#898781"}}>Loading SplitEase…</div>;
-  if (!user)   return <Navigate to="/login" />;
+  const [open, setOpen] = useState(false);   // mobile sidebar open / closed
+
+  // Esc key closes the mobile sidebar
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  if (loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#52514e"}}>Loading SplitEase…</div>;
+  if (!user)   return <Navigate to="/login" replace />;
+
   return (
-    <div style={{ display:"flex", height:"100vh" }}>
-      <Sidebar />
-      <div style={{ flex:1, overflow:"auto" }}>{children}</div>
+    <div className="app-shell">
+      <Sidebar open={open} onClose={() => setOpen(false)} />
+      <div className={"sidebar-overlay" + (open ? " open" : "")} onClick={() => setOpen(false)} />
+      <div className="app-main">
+        {/* top bar with ☰ button — visible only on mobile */}
+        <div className="mobile-topbar">
+          <button className="hamburger" aria-label="Open menu" onClick={() => setOpen(true)}>☰</button>
+          <span style={{ fontWeight:600, color:"#4f2fe0" }}>💸 SplitEase</span>
+        </div>
+        <Outlet />
+      </div>
     </div>
   );
 }
@@ -33,14 +52,16 @@ export default function App() {
         <Route path="/login"    element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* protected routes */}
-        <Route path="/dashboard" element={<PrivateLayout><Dashboard /></PrivateLayout>} />
-        <Route path="/groups"   element={<PrivateLayout><Groups /></PrivateLayout>} />
-        <Route path="/expenses" element={<PrivateLayout><Expenses /></PrivateLayout>} />
-        <Route path="/settle"   element={<PrivateLayout><SettleUp /></PrivateLayout>} />
-        <Route path="/profile"  element={<PrivateLayout><Profile /></PrivateLayout>} />
+        {/* protected routes — share ONE layout */}
+        <Route element={<PrivateLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/groups"    element={<Groups />} />
+          <Route path="/expenses"  element={<Expenses />} />
+          <Route path="/settle"    element={<SettleUp />} />
+          <Route path="/profile"   element={<Profile />} />
+        </Route>
 
-        <Route path="*" element={<Navigate to="/login" />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   );
